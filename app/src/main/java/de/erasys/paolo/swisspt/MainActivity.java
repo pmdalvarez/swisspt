@@ -43,7 +43,7 @@ import de.erasys.paolo.swisspt.content.provider.LocationsTable;
 public class MainActivity extends ActionBarActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
 
-    private class ConnectionsQueryTask extends AsyncTask<String, Void, String> {
+    private class LoadConnectionsTask extends AsyncTask<String, Void, String> {
 
         @Override
         protected String doInBackground(String... params) {
@@ -81,6 +81,13 @@ public class MainActivity extends ActionBarActivity
                     Log.d(LOG_TAG, "FOUND CONNECTION ! name is " + connection.name + " at " + connection.departure);
                     mConnectionsAdapter.add(connection);
                 }
+                // hide loadingView + show listView
+                TextView loadingView = (TextView) findViewById(R.id.loading);
+                loadingView.setVisibility(View.GONE);
+                ListView stationboard = (ListView) findViewById(R.id.stationboard);
+                stationboard.setVisibility(View.VISIBLE);
+
+                // call adapter notify data set changed method
                 mConnectionsAdapter.notifyDataSetChanged();
             } catch (JSONException e) {
                // fail silently
@@ -99,7 +106,7 @@ public class MainActivity extends ActionBarActivity
         }
     }
 
-    private class LocationsQueryTask extends AsyncTask<String, Void, String> {
+    private class LoadLocationsTask extends AsyncTask<String, Void, String> {
         @Override
         protected String doInBackground(String... params) {
 
@@ -284,7 +291,7 @@ Log.d(LOG_TAG, "fillData");
                         final StringBuilder sb = new StringBuilder();
                         sb.append(s);
                         final String[] params = {sb.toString()};
-                        LocationsQueryTask task = new LocationsQueryTask();
+                        LoadLocationsTask task = new LoadLocationsTask();
                         task.execute(params);
                     }
                 }
@@ -301,10 +308,18 @@ Log.d(LOG_TAG, "fillData");
                 @Override
                 public void onItemClick(AdapterView<?> parent, View itemView, int pos,
                                         long id) {
+                    // 1/3: clear list
                     mConnectionsAdapter.clearData();
+                    // 2/3: show loading textView + hide listview
+                    TextView loadingView = (TextView) findViewById(R.id.loading);
+                    loadingView.setVisibility(View.VISIBLE);
+                    ListView stationboard = (ListView) findViewById(R.id.stationboard);
+                    stationboard.setVisibility(View.GONE);
+
+                    // 3/3: load connections
                     TextView textView = (TextView) itemView.findViewById(R.id.autoCompleteItemTextView);
                     final String[] params = {(String)textView.getText()};
-                    ConnectionsQueryTask task = new ConnectionsQueryTask();
+                    LoadConnectionsTask task = new LoadConnectionsTask();
                     task.execute(params);
                 }
             });

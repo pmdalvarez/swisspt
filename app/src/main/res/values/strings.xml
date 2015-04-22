@@ -3,6 +3,7 @@
 
     <string name="app_name">Swiss Transport</string>
     <string name="location_search_hint">Enter station name</string>
+    <string name="loading">loading stations ..</string>
     <string name="action_settings">Settings</string>
 
 </resources>
