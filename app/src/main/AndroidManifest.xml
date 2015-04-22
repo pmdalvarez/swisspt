@@ -19,7 +19,7 @@
             </intent-filter>
         </activity>
         <provider
-            android:name=".content.LocationsContentProvider"
+            android:name=".content.provider.LocationsContentProvider"
             android:authorities="de.erasys.paolo.swisspt.content" >
         </provider>
     </application>

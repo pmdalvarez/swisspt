@@ -1,4 +1,4 @@
-package de.erasys.paolo.swisspt.content;
+package de.erasys.paolo.swisspt.content.provider;
 
 import android.provider.BaseColumns;
 

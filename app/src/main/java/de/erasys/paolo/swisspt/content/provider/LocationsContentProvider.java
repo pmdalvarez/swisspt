@@ -1,4 +1,4 @@
-package de.erasys.paolo.swisspt.content;
+package de.erasys.paolo.swisspt.content.provider;
 
 import android.content.ContentProvider;
 import android.content.ContentResolver;
@@ -41,7 +41,7 @@ public class LocationsContentProvider extends ContentProvider {
         @Override
         public void onCreate(SQLiteDatabase database) {
             Log.d(LOG_TAG, "DATABASE ON CREATE DROPPING TABLE");
-            database.execSQL("drop table if exists " + LocationsTable.TABLE+ ";"); // REMOVE LATER
+            database.execSQL("drop table if exists " + LocationsTable.TABLE + ";"); // REMOVE LATER
             Log.d(LOG_TAG, "DATABASE ON CREATE RECREATING TABLE");
             database.execSQL(DATABASE_CREATE);
         }

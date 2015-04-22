@@ -16,8 +16,8 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AutoCompleteTextView;
+import android.widget.ListView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -30,15 +30,77 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 
-import de.erasys.paolo.swisspt.content.LocationsContentProvider;
-import de.erasys.paolo.swisspt.content.LocationsTable;
+import de.erasys.paolo.swisspt.content.model.Connection;
+import de.erasys.paolo.swisspt.content.model.Location;
+import de.erasys.paolo.swisspt.content.provider.LocationsContentProvider;
+import de.erasys.paolo.swisspt.content.provider.LocationsTable;
 
 
 public class MainActivity extends ActionBarActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
 
-    private class LocationQueryTask extends AsyncTask<String, Void, String> {
+    private class ConnectionsQueryTask extends AsyncTask<String, Void, String> {
+
+        @Override
+        protected String doInBackground(String... params) {
+
+            // params comes from the execute() call: params[0] is the queryString.
+            try {
+                String result = getConnections(params[0]);
+                return result;
+            } catch (IOException e) {
+                return "Unable to retrieve web page. URL may be invalid.";
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            try {
+                JSONObject resultJsonObj  = new JSONObject(result); // json
+                JSONArray stations = resultJsonObj.getJSONArray("stationboard"); // get data object
+                String originStation = resultJsonObj.getJSONObject("station").getString("name");
+
+                mConnectionsAdapter.clearData();
+                for (int i = 0; i < stations.length(); i++) {
+                    JSONObject connJsonObj = stations.getJSONObject(i);
+                    JSONObject stopJsonObj = connJsonObj.getJSONObject("stop");
+                    Connection connection = new Connection();
+                    connection.name = connJsonObj.getString("name");
+                    connection.departure = getTimeFromTimestamp(stopJsonObj.getString("departure"));
+                    Log.d(LOG_TAG, "FOUND CONNECTION ! converted datetime " + stopJsonObj.getString("departure") + " to " + connection.departure);
+                    Location origin = new Location();
+                    origin.name = originStation;
+                    connection.origin = origin;
+                    Location location = new Location();
+                    location.name = connJsonObj.getString("to");
+                    connection.destination = location;
+                    Log.d(LOG_TAG, "FOUND CONNECTION ! name is " + connection.name + " at " + connection.departure);
+                    mConnectionsAdapter.add(connection);
+                }
+                mConnectionsAdapter.notifyDataSetChanged();
+            } catch (JSONException e) {
+               // fail silently
+            }
+        }
+
+        private String getTimeFromTimestamp(String datetime) {
+            try {
+                Date dateObj  = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").parse(datetime);
+                return new SimpleDateFormat("HH:mm").format(dateObj);
+            } catch (ParseException e) {
+                // don't format the date
+                Log.d(this.getClass().getName(), "setViewValue PARSE ERROR datetime string  = " + datetime + " " + e.getMessage() + " " + e.getStackTrace());
+            }
+            return "";
+        }
+    }
+
+    private class LocationsQueryTask extends AsyncTask<String, Void, String> {
         @Override
         protected String doInBackground(String... params) {
 
@@ -65,21 +127,60 @@ public class MainActivity extends ActionBarActivity
 
         @Override
         protected void onPostExecute(String result) {
+            mLocationsAdapter.notifyDataSetChanged(); // correct?
         }
     }
 
-    // this is the Adapter being used to display the chat history data
-    LocationsAdapter mAdapter = null;
-
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
+
+    // this is the Adapter being used to display the location suggestions of the autocompletetextview
+    LocationsAdapter mLocationsAdapter = null;
+
+    // this is the Adapter being used to display the stationboard
+    ConnectionsAdapter mConnectionsAdapter = null;
+
+    private String getConnections(String queryString) throws IOException {
+        InputStream is = null;
+
+        try {
+            String urlStr =  String.format(
+                "http://transport.opendata.ch/v1/stationboard?station=%s",
+                URLEncoder.encode(queryString, "UTF-8")
+            );
+            URL url = new URL(urlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setReadTimeout(10000 /* milliseconds */);
+            conn.setConnectTimeout(15000 /* milliseconds */);
+            conn.setRequestMethod("GET");
+            conn.setDoInput(true);
+            // Starts the query
+            conn.connect();
+            int response = conn.getResponseCode();
+            Log.d(LOG_TAG, "GETTING CONNECTIONS!! The response is: " + response);
+            is = conn.getInputStream();
+
+            // Convert the InputStream into a string
+            String contentAsString = convertInputStreamToString(is);
+            Log.d(LOG_TAG, "GETTING CONNECTIONS!! The content is: " + contentAsString);
+
+            return contentAsString;
+
+            // Makes sure that the InputStream is closed after the app is
+            // finished using it.
+        } finally {
+            if (is != null) {
+                is.close();
+            }
+        }
+    }
 
     private String getLocations(String queryString) throws IOException {
         InputStream is = null;
 
         try {
             String urlStr =  String.format(
-                    "http://transport.opendata.ch/v1/locations?query=%s",
-                    URLEncoder.encode(queryString, "UTF-8")
+                "http://transport.opendata.ch/v1/locations?query=%s",
+                URLEncoder.encode(queryString, "UTF-8")
             );
             URL url = new URL(urlStr);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -97,7 +198,6 @@ public class MainActivity extends ActionBarActivity
             String contentAsString = convertInputStreamToString(is);
             Log.d(LOG_TAG, "GETTING LOCATIONS!! The content is: " + contentAsString);
 
-            // TODO - parse string to list of stations
             return contentAsString;
 
             // Makes sure that the InputStream is closed after the app is
@@ -123,6 +223,7 @@ public class MainActivity extends ActionBarActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         setupAutoCompleteTextView();
+        setupStationboard();
     }
 
     @Override
@@ -160,21 +261,21 @@ public class MainActivity extends ActionBarActivity
 
     @Override
     public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
-        mAdapter.swapCursor(data);
+        mLocationsAdapter.swapCursor(data);
     }
 
     @Override
     public void onLoaderReset(Loader<Cursor> loader) {
-        mAdapter.swapCursor(null);
+        mLocationsAdapter.swapCursor(null);
     }
 
     private void setupAutoCompleteTextView() {
 Log.d(LOG_TAG, "fillData");
         getSupportLoaderManager().initLoader(0, null, this);
-        mAdapter = new LocationsAdapter(this, null, LocationsAdapter.FLAG_REGISTER_CONTENT_OBSERVER);
+        mLocationsAdapter = new LocationsAdapter(this, null, LocationsAdapter.FLAG_REGISTER_CONTENT_OBSERVER);
         final AutoCompleteTextView locationSearchView = (AutoCompleteTextView) findViewById(R.id.autoCompleteLocationSearch);
         if (locationSearchView != null)  {
-            locationSearchView.setAdapter(mAdapter);
+            locationSearchView.setAdapter(mLocationsAdapter);
 
             locationSearchView.addTextChangedListener(new TextWatcher() {
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -184,7 +285,7 @@ Log.d(LOG_TAG, "fillData");
                         final StringBuilder sb = new StringBuilder();
                         sb.append(s);
                         final String[] params = {sb.toString()};
-                        LocationQueryTask task = new LocationQueryTask();
+                        LocationsQueryTask task = new LocationsQueryTask();
                         task.execute(params);
                     }
                 }
@@ -198,18 +299,22 @@ Log.d(LOG_TAG, "fillData");
             });
             // add listener for when user chooses a location
             locationSearchView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-
                 @Override
                 public void onItemClick(AdapterView<?> parent, View itemView, int pos,
                                         long id) {
                     TextView textView = (TextView) itemView.findViewById(R.id.autoCompleteItemTextView);
-                    String text = (String)textView.getText();
-                    Toast.makeText(getApplicationContext(), "Selected text " + text, Toast.LENGTH_LONG).show();
+                    final String[] params = {(String)textView.getText()};
+                    ConnectionsQueryTask task = new ConnectionsQueryTask();
+                    task.execute(params);
                 }
             });
         }
     }
 
-
+    private void setupStationboard() {
+        final ListView listView = (ListView) findViewById(R.id.stationboard);
+        mConnectionsAdapter = new ConnectionsAdapter(this, new ArrayList<Connection>());
+        listView.setAdapter(mConnectionsAdapter);
+    }
 
 }

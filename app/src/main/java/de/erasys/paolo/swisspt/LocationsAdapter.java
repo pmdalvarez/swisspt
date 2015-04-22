@@ -14,8 +14,8 @@ import android.widget.TextView;
 
 import java.util.Arrays;
 
-import de.erasys.paolo.swisspt.content.LocationsContentProvider;
-import de.erasys.paolo.swisspt.content.LocationsTable;
+import de.erasys.paolo.swisspt.content.provider.LocationsContentProvider;
+import de.erasys.paolo.swisspt.content.provider.LocationsTable;
 
 /**
  * Created by paolo on 17.04.15.
