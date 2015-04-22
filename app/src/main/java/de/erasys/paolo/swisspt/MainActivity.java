@@ -36,7 +36,6 @@ import java.util.ArrayList;
 import java.util.Date;
 
 import de.erasys.paolo.swisspt.content.model.Connection;
-import de.erasys.paolo.swisspt.content.model.Location;
 import de.erasys.paolo.swisspt.content.provider.LocationsContentProvider;
 import de.erasys.paolo.swisspt.content.provider.LocationsTable;
 
@@ -65,20 +64,20 @@ public class MainActivity extends ActionBarActivity
                 JSONArray stations = resultJsonObj.getJSONArray("stationboard"); // get data object
                 String originStation = resultJsonObj.getJSONObject("station").getString("name");
 
-                mConnectionsAdapter.clearData();
+                // assume adapter is already clear
                 for (int i = 0; i < stations.length(); i++) {
                     JSONObject connJsonObj = stations.getJSONObject(i);
                     JSONObject stopJsonObj = connJsonObj.getJSONObject("stop");
-                    Connection connection = new Connection();
-                    connection.name = connJsonObj.getString("name");
-                    connection.departure = getTimeFromTimestamp(stopJsonObj.getString("departure"));
-                    Log.d(LOG_TAG, "FOUND CONNECTION ! converted datetime " + stopJsonObj.getString("departure") + " to " + connection.departure);
-                    Location origin = new Location();
-                    origin.name = originStation;
-                    connection.origin = origin;
-                    Location location = new Location();
-                    location.name = connJsonObj.getString("to");
-                    connection.destination = location;
+                    String departureTime = getTimeFromTimestamp(stopJsonObj.getString("departure"));
+                    String arrivalTime = getTimeFromTimestamp(stopJsonObj.getString("arrival"));
+                    String destinationStation = connJsonObj.getString("to");
+                    Connection connection = new Connection(
+                        connJsonObj.getString("name"),
+                        originStation,
+                        departureTime,
+                        destinationStation,
+                        arrivalTime
+                    );
                     Log.d(LOG_TAG, "FOUND CONNECTION ! name is " + connection.name + " at " + connection.departure);
                     mConnectionsAdapter.add(connection);
                 }
@@ -279,8 +278,8 @@ Log.d(LOG_TAG, "fillData");
 
             locationSearchView.addTextChangedListener(new TextWatcher() {
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    // to make more efficient make query only if string length = 2
-                    if (s != null && s.length() == 1) {
+                    // to make more efficient make query only if string length = 3
+                    if (s != null && s.length() == 3) {
                         Log.d(LOG_TAG, "TEXT CHANGED!!! Querying swiss PT API");
                         final StringBuilder sb = new StringBuilder();
                         sb.append(s);
@@ -302,6 +301,7 @@ Log.d(LOG_TAG, "fillData");
                 @Override
                 public void onItemClick(AdapterView<?> parent, View itemView, int pos,
                                         long id) {
+                    mConnectionsAdapter.clearData();
                     TextView textView = (TextView) itemView.findViewById(R.id.autoCompleteItemTextView);
                     final String[] params = {(String)textView.getText()};
                     ConnectionsQueryTask task = new ConnectionsQueryTask();

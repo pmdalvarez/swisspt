@@ -57,12 +57,12 @@ public class ConnectionsAdapter extends BaseAdapter {
         }
 
         TextView timeCol = (TextView) convertView.findViewById(R.id.connectionDeparture);
-        TextView departureCol = (TextView) convertView.findViewById(R.id.connectionName);
+        TextView connNameCol = (TextView) convertView.findViewById(R.id.connectionName);
         TextView destinationCol = (TextView) convertView.findViewById(R.id.connectionDestination);
 
-        departureCol.setText(values.get(position).name);
-        timeCol.setText(values.get(position).departure);
-        destinationCol.setText(values.get(position).destination.name);
+        timeCol.setText(values.get(position).departure.time);
+        connNameCol.setText(values.get(position).name);
+        destinationCol.setText(values.get(position).arrival.location.name);
 //        Log.d(LOG_TAG, "values:" + values.toString() + " value:" + values.get(position));
 
         return convertView;
