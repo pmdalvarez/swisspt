@@ -30,7 +30,7 @@ public class LocationsContentProvider extends ContentProvider {
                 + LocationsTable.TABLE
                 + "("
                 + LocationsTable.COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
-                + LocationsTable.COLUMN_NAME + " TEXT NOT NULL"
+                + LocationsTable.COLUMN_NAME + " TEXT UNIQUE NOT NULL"
                 + ");";
 
         public LocationsDbHelper(Context context) {
@@ -40,10 +40,10 @@ public class LocationsContentProvider extends ContentProvider {
         // Method is called during creation of the database
         @Override
         public void onCreate(SQLiteDatabase database) {
-            Log.d(LOG_TAG, "DATABASE ON CREATE");
+            Log.d(LOG_TAG, "DATABASE ON CREATE DROPPING TABLE");
             database.execSQL("drop table if exists " + LocationsTable.TABLE+ ";"); // REMOVE LATER
+            Log.d(LOG_TAG, "DATABASE ON CREATE RECREATING TABLE");
             database.execSQL(DATABASE_CREATE);
-            database.execSQL("insert into " + LocationsTable.TABLE+ " (" +LocationsTable.COLUMN_NAME+ ") values ('Basel'),('Lausanne'),('Lucerne'),('Zurich');"); // REMOVE LATER
         }
 
         // Method is called during an upgrade of the database,
@@ -133,7 +133,7 @@ public class LocationsContentProvider extends ContentProvider {
         long id;
         switch (uriType) {
             case LOCATIONS:
-                id = sqlDB.insert(LocationsTable.TABLE, null, values);
+                id = sqlDB.replace(LocationsTable.TABLE, null, values);
                 break;
             default:
                 throw new IllegalArgumentException("Unknown URI: " + uri);

@@ -1,5 +1,6 @@
 package de.erasys.paolo.swisspt;
 
+import android.content.ContentValues;
 import android.database.Cursor;
 import android.os.AsyncTask;
 import android.support.v4.app.LoaderManager;
@@ -12,7 +13,11 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.AdapterView;
 import android.widget.AutoCompleteTextView;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -39,30 +44,27 @@ public class MainActivity extends ActionBarActivity
 
             // params comes from the execute() call: params[0] is the queryString.
             try {
-                return getLocations(params[0]);
-            } catch (IOException e) {
-                return "Unable to retrieve web page. URL may be invalid.";
-            }
-        }
-        // onPostExecute displays the results of the AsyncTask.
-        @Override
-        protected void onPostExecute(String result) {
-            // to do: update location list  via content resolver
-
-            try {
+                String result = getLocations(params[0]);
                 JSONObject jObject  = new JSONObject(result); // json
                 JSONArray stations = jObject.getJSONArray("stations"); // get data object
-                for (int i=0; i < stations.length(); i++) {
+                for (int i = 0; i < stations.length(); i++) {
                     JSONObject station = stations.getJSONObject(i);
-                    JSONObject stationName = station.getJSONObject("name");
-                    String locationName = stationName.toString();
-Log.d(LOG_TAG, "FOUND LOCATIONS! name is " + locationName);
+                    String locationName = station.getString("name");
+                    Log.d(LOG_TAG, "FOUND LOCATION ! name is " + locationName);
+                    ContentValues values = new ContentValues();
+                    values.put(LocationsTable.COLUMN_NAME, locationName);
+                    getContentResolver().insert(LocationsContentProvider.CONTENT_URI, values);
                 }
+                return result;
+            } catch (IOException e) {
+                return "Unable to retrieve web page. URL may be invalid.";
             } catch (JSONException e) {
-                // don't update DB - do nothing
+                return "Cannot parse locations query response.";
             }
+        }
 
-            //textView.setText(result);
+        @Override
+        protected void onPostExecute(String result) {
         }
     }
 
@@ -176,7 +178,8 @@ Log.d(LOG_TAG, "fillData");
 
             locationSearchView.addTextChangedListener(new TextWatcher() {
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    if (s != null && s.length() != 0) {
+                    // to make more efficient make query only if string length = 2
+                    if (s != null && s.length() == 1) {
                         Log.d(LOG_TAG, "TEXT CHANGED!!! Querying swiss PT API");
                         final StringBuilder sb = new StringBuilder();
                         sb.append(s);
@@ -193,7 +196,17 @@ Log.d(LOG_TAG, "fillData");
                     // do nothing
                 }
             });
+            // add listener for when user chooses a location
+            locationSearchView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
 
+                @Override
+                public void onItemClick(AdapterView<?> parent, View itemView, int pos,
+                                        long id) {
+                    TextView textView = (TextView) itemView.findViewById(R.id.autoCompleteItemTextView);
+                    String text = (String)textView.getText();
+                    Toast.makeText(getApplicationContext(), "Selected text " + text, Toast.LENGTH_LONG).show();
+                }
+            });
         }
     }
 

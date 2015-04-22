@@ -85,8 +85,6 @@ public class LocationsAdapter  extends CursorAdapter implements Filterable {
         // TODO - if string is empty then return empty cursor without running query
         Log.d(LOG_TAG, "QUERYING FOR EMPTY CURSOR ");
         return mContentResolver.query(LocationsContentProvider.CONTENT_URI, projection, LocationsTable.COLUMN_ID + " = 0 ", null, null);
-
-
     }
 
 }
