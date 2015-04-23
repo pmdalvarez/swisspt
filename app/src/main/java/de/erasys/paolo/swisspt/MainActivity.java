@@ -26,6 +26,7 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Timer;
 import java.util.TimerTask;
 
 import de.erasys.paolo.swisspt.adapters.ConnectionsAdapter;
@@ -41,11 +42,13 @@ public class MainActivity extends ActionBarActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
 
     private class LocationsLoader extends AsyncTask<String, Void, String> {
+
         @Override
         protected String doInBackground(String... params) {
 
             // params comes from the execute() call: params[0] is the queryString.
             try {
+                Log.d(LOG_TAG, "SEARCHING FOR LOCATIONS!!");
                 String result = HttpRequestHelper.getLocations(params[0]);
                 JSONObject jObject  = new JSONObject(result); // json
                 JSONArray stations = jObject.getJSONArray("stations"); // get data object
@@ -77,6 +80,15 @@ public class MainActivity extends ActionBarActivity
         private ArrayList<Connection> mConnections;
 
         @Override
+        protected void onPreExecute() {
+            // hide list and show loading view
+            ProgressBar loadingView = (ProgressBar) findViewById(R.id.loading);
+            loadingView.setVisibility(View.VISIBLE);
+            ListView stationboard = (ListView) findViewById(R.id.stationboard);
+            stationboard.setVisibility(View.GONE);
+        }
+
+        @Override
         protected String doInBackground(String... params) {
 
             // params comes from the execute() call: params[0] is the queryString.
@@ -106,34 +118,6 @@ public class MainActivity extends ActionBarActivity
             // TODO: reload after X minutes
         }
 
-    }
-
-    private class StationboardLoaderTimerTask extends TimerTask {
-
-        private String mLocation;
-
-        public StationboardLoaderTimerTask(String location) {
-            mLocation = location;
-        }
-
-        @Override
-        public void run() {
-            loadStationboard();
-
-            // wait then run again
-            try {
-                wait(20000);
-                loadStationboard();
-            } catch (InterruptedException e) {
-                // dont reload - let cycle break
-            }
-        }
-
-        private void loadStationboard() {
-            final String[] params = {mLocation};
-            StationboardLoader task = new StationboardLoader();
-            task.execute(params);
-        }
     }
 
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
@@ -225,26 +209,37 @@ Log.d(LOG_TAG, "fillData");
             });
             // add listener for when user chooses a location
             locationSearchView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+                private Timer mTimer = null;
+
                 @Override
-                public void onItemClick(AdapterView<?> parent, View itemView, int pos,
+                public void onItemClick(AdapterView<?> parent, final View itemView, int pos,
                                         long id) {
 
-                    // 1/3: show loading view + hide listview
-                    ProgressBar loadingView = (ProgressBar) findViewById(R.id.loading);
-                    loadingView.setVisibility(View.VISIBLE);
-                    ListView stationboard = (ListView) findViewById(R.id.stationboard);
-                    stationboard.setVisibility(View.GONE);
+                    // cancel existing timer if exists
+                    if (mTimer != null)  {
+                        Log.d(LOG_TAG, "ITEM CHOSEN!!! Cancelling existing daemon");
+                        mTimer.cancel();
+                    }
 
-                    // 2/3: load connections
-                    TextView textView = (TextView) itemView.findViewById(R.id.autoCompleteItemTextView);
-                    final String[] params = {(String)textView.getText()};
-                    StationboardLoader task = new StationboardLoader();
-                    task.execute(params);
-
-                    /**
-                     * StationboardLoaderTimerTask task = new StationboardLoaderTimerTask();
-                     * task.run(); ????
-                     */
+                    // now create a new timer daemon and assign to member variable mTimer so it can be cancelled
+                    // next time item is selected
+                    TimerTask timerTask = new TimerTask() {
+                        @Override
+                        public void run() {
+                            // asynctasks are meant to be run only on ui thread and hence need runOnUiThread method
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    TextView textView = (TextView) itemView.findViewById(R.id.autoCompleteItemTextView);
+                                    final String[] params = {(String) textView.getText()};
+                                    StationboardLoader task = new StationboardLoader();
+                                    task.execute(params);
+                                }
+                            });
+                        }
+                    };
+                    mTimer = new Timer(true);
+                    mTimer.scheduleAtFixedRate(timerTask, 0, 15 * 1000);
                 }
             });
         }
