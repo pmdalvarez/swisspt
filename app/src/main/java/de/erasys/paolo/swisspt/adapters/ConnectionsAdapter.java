@@ -68,6 +68,10 @@ public class ConnectionsAdapter extends BaseAdapter {
         return convertView;
     }
 
+    public boolean isEmpty() {
+        return this.values.size() == 0;
+    }
+
     public void clear() {
         this.values.clear();
     }

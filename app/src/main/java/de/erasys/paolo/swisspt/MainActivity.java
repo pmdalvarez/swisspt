@@ -71,7 +71,9 @@ public class MainActivity extends ActionBarActivity
         @Override
         protected void onPostExecute(String result) {
             Log.d(LOG_TAG, "LOCATIONS LOADER: notifying mLocationsAdapter data set changed");
-            mLocationsAdapter.notifyDataSetChanged(); // correct?
+            mLocationsAdapter.notifyDataSetChanged();
+            AutoCompleteTextView locationSearch = (AutoCompleteTextView) findViewById(R.id.autoCompleteLocationSearch);
+            locationSearch.showDropDown();
         }
     }
 
@@ -211,8 +213,7 @@ Log.d(LOG_TAG, "fillData");
 
             locationSearchView.addTextChangedListener(new TextWatcher() {
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    // 1/3: Query Locations
-                    // to make more efficient make query only if string length = 3
+                    // 1/3: Query Locations. To make more efficient make query only if string length = 3
                     if (s != null && s.length() == 3) {
                         Log.d(LOG_TAG, "TEXT CHANGED!!! Querying swiss PT API");
                         final StringBuilder sb = new StringBuilder();
@@ -222,15 +223,19 @@ Log.d(LOG_TAG, "fillData");
                         task.execute(params);
                     }
 
-                    // 2/3: If there is a stationboardreloader that exists, cancel reload and make null to indicate that we don't wanna restart it onResume
+                    // 2/3: If there is a StationboardReloader instance
+                    // -  cancel, to stop reloading
+                    // -  make null, to indicate that we don't wanna restart it onResume
                     if (mStationboardReloader != null) {
                         mStationboardReloader.cancel();
                         mStationboardReloader = null;
                     }
 
-                    // 3/3: clear stationboard data
-                    mConnectionsAdapter.clear();
-                    mConnectionsAdapter.notifyDataSetChanged();
+                    // 3/3: Clear stationboard table if not already empty
+                    if (!mConnectionsAdapter.isEmpty()) {
+                        mConnectionsAdapter.clear();
+                        mConnectionsAdapter.notifyDataSetChanged();
+                    }
 
                 }
                 public void beforeTextChanged(CharSequence s, int start, int count,
