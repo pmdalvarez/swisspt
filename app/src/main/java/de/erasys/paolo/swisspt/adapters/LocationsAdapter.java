@@ -1,4 +1,4 @@
-package de.erasys.paolo.swisspt;
+package de.erasys.paolo.swisspt.adapters;
 
 import android.content.ContentResolver;
 import android.content.Context;
@@ -14,6 +14,7 @@ import android.widget.TextView;
 
 import java.util.Arrays;
 
+import de.erasys.paolo.swisspt.R;
 import de.erasys.paolo.swisspt.content.provider.LocationsContentProvider;
 import de.erasys.paolo.swisspt.content.provider.LocationsTable;
 
