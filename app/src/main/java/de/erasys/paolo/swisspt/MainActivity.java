@@ -123,18 +123,12 @@ public class MainActivity extends ActionBarActivity
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
 
     // this is the Adapter being used to display the location suggestions of the autocompletetextview
-    LocationsAdapter mLocationsAdapter = null;
+    private LocationsAdapter mLocationsAdapter = null;
 
     // this is the Adapter being used to display the stationboard
-    ConnectionsAdapter mConnectionsAdapter = null;
+    private ConnectionsAdapter mConnectionsAdapter = null;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        setupAutoCompleteTextView();
-        setupStationboard();
-    }
+    private Timer mStationboardReloader = null;
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -158,7 +152,6 @@ public class MainActivity extends ActionBarActivity
         return super.onOptionsItemSelected(item);
     }
 
-
     @Override
     public Loader onCreateLoader(int i, Bundle bundle) {
         String[] projection = {
@@ -179,6 +172,35 @@ public class MainActivity extends ActionBarActivity
         mLocationsAdapter.swapCursor(null);
     }
 
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        setupAutoCompleteTextView();
+        setupStationboard();
+    }
+
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (mStationboardReloader != null)  {
+            Log.d(LOG_TAG, "Application on pause!! cancelling StationboardReloader");
+            mStationboardReloader.cancel();
+        }
+    }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mStationboardReloader != null)  {
+            Log.d(LOG_TAG, "Application resumed and cancelled mStationboardReloader exists!! restarting StationboardReloader");
+            startStationboardReloader();
+        }
+    }
+
+
     private void setupAutoCompleteTextView() {
 Log.d(LOG_TAG, "fillData");
         getSupportLoaderManager().initLoader(0, null, this);
@@ -189,6 +211,7 @@ Log.d(LOG_TAG, "fillData");
 
             locationSearchView.addTextChangedListener(new TextWatcher() {
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    // 1/3: Query Locations
                     // to make more efficient make query only if string length = 3
                     if (s != null && s.length() == 3) {
                         Log.d(LOG_TAG, "TEXT CHANGED!!! Querying swiss PT API");
@@ -198,6 +221,17 @@ Log.d(LOG_TAG, "fillData");
                         LocationsLoader task = new LocationsLoader();
                         task.execute(params);
                     }
+
+                    // 2/3: If there is a stationboardreloader that exists, cancel reload and make null to indicate that we don't wanna restart it onResume
+                    if (mStationboardReloader != null) {
+                        mStationboardReloader.cancel();
+                        mStationboardReloader = null;
+                    }
+
+                    // 3/3: clear stationboard data
+                    mConnectionsAdapter.clear();
+                    mConnectionsAdapter.notifyDataSetChanged();
+
                 }
                 public void beforeTextChanged(CharSequence s, int start, int count,
                                               int after) {
@@ -209,40 +243,43 @@ Log.d(LOG_TAG, "fillData");
             });
             // add listener for when user chooses a location
             locationSearchView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-                private Timer mTimer = null;
 
                 @Override
                 public void onItemClick(AdapterView<?> parent, final View itemView, int pos,
                                         long id) {
 
                     // cancel existing timer if exists
-                    if (mTimer != null)  {
-                        Log.d(LOG_TAG, "ITEM CHOSEN!!! Cancelling existing daemon");
-                        mTimer.cancel();
+                    if (mStationboardReloader != null)  {
+                        Log.d(LOG_TAG, "ITEM CHOSEN!!! stopping current StationboardReloader");
+                        mStationboardReloader.cancel();
                     }
 
-                    // now create a new timer daemon and assign to member variable mTimer so it can be cancelled
-                    // next time item is selected
-                    TimerTask timerTask = new TimerTask() {
-                        @Override
-                        public void run() {
-                            // asynctasks are meant to be run only on ui thread and hence need runOnUiThread method
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    TextView textView = (TextView) itemView.findViewById(R.id.autoCompleteItemTextView);
-                                    final String[] params = {(String) textView.getText()};
-                                    StationboardLoader task = new StationboardLoader();
-                                    task.execute(params);
-                                }
-                            });
-                        }
-                    };
-                    mTimer = new Timer(true);
-                    mTimer.scheduleAtFixedRate(timerTask, 0, 15 * 1000);
+                    startStationboardReloader();
                 }
             });
         }
+    }
+
+    private void startStationboardReloader() {
+        // now create a new timer  and assign to member variable mTimer
+        // so that it can be cancelled next time item is selected
+        TimerTask timerTask = new TimerTask() {
+            @Override
+            public void run() {
+                // asynctasks are meant to be run only on ui thread and hence need runOnUiThread method
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        TextView textView = (TextView) findViewById(R.id.autoCompleteLocationSearch);
+                        final String[] params = {textView.getText().toString()};
+                        StationboardLoader task = new StationboardLoader();
+                        task.execute(params);
+                    }
+                });
+            }
+        };
+        mStationboardReloader = new Timer();
+        mStationboardReloader.scheduleAtFixedRate(timerTask, 0, 15 * 1000);
     }
 
     private void setupStationboard() {

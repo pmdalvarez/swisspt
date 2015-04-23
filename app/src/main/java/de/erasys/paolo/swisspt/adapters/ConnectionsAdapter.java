@@ -68,6 +68,10 @@ public class ConnectionsAdapter extends BaseAdapter {
         return convertView;
     }
 
+    public void clear() {
+        this.values.clear();
+    }
+
     public void setValues(ArrayList<Connection> values) {
         this.values.clear();
         for (int i = 0; i < values.size(); i++) {

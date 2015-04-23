@@ -31,8 +31,8 @@ public class ModelFactory {
             for (int i = 0; i < stations.length(); i++) {
                 JSONObject connJsonObj = stations.getJSONObject(i);
                 JSONObject stopJsonObj = connJsonObj.getJSONObject("stop");
-                String departureTime = getTimeFromTimestamp(stopJsonObj.getString("departure"));
-                String arrivalTime = getTimeFromTimestamp(stopJsonObj.getString("arrival"));
+                String departureTime = stopJsonObj.isNull("departure") ? "" : getTimeFromTimestamp(stopJsonObj.getString("departure"));
+                String arrivalTime = stopJsonObj.isNull("arrival") ? "" : getTimeFromTimestamp(stopJsonObj.getString("arrival"));
                 String destinationStation = connJsonObj.getString("to");
                 Connection connection = new Connection(
                         connJsonObj.getString("name"),
@@ -50,16 +50,15 @@ public class ModelFactory {
         return connections;
     }
 
-
     private static String getTimeFromTimestamp(String datetime) {
         try {
             Date dateObj  = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").parse(datetime);
             return new SimpleDateFormat("HH:mm").format(dateObj);
         } catch (ParseException e) {
-            // don't format the date
+            // don't format the date - return empty string
             Log.d(LOG_TAG, "setViewValue PARSE ERROR datetime string  = " + datetime + " " + e.getMessage() + " " + e.getStackTrace());
+            return "";
         }
-        return "";
     }
 
 }
