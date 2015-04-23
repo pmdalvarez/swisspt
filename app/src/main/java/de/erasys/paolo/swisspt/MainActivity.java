@@ -17,6 +17,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AutoCompleteTextView;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -30,11 +31,10 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.TimerTask;
 
+import de.erasys.paolo.swisspt.content.ModelFactory;
 import de.erasys.paolo.swisspt.content.model.Connection;
 import de.erasys.paolo.swisspt.content.provider.LocationsContentProvider;
 import de.erasys.paolo.swisspt.content.provider.LocationsTable;
@@ -43,14 +43,19 @@ import de.erasys.paolo.swisspt.content.provider.LocationsTable;
 public class MainActivity extends ActionBarActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
 
-    private class LoadConnectionsTask extends AsyncTask<String, Void, String> {
+    private class StationboardLoader extends AsyncTask<String, Void, String> {
+
+        private ArrayList<Connection> mConnections;
 
         @Override
         protected String doInBackground(String... params) {
 
             // params comes from the execute() call: params[0] is the queryString.
             try {
-                String result = getConnections(params[0]);
+                String result = getStationboardHttpRequestResult(params[0]);
+                // parsing on background thread rather than UI thread as to not overburden it
+                mConnections = ModelFactory.getConnectionsFromJsonString(result);
+
                 return result;
             } catch (IOException e) {
                 return "Unable to retrieve web page. URL may be invalid.";
@@ -59,60 +64,101 @@ public class MainActivity extends ActionBarActivity
 
         @Override
         protected void onPostExecute(String result) {
+            // update contents of adapter with new list of connections
+            mConnectionsAdapter.setValues(mConnections);
+            mConnectionsAdapter.notifyDataSetChanged();
+
+            // hide loadingView + show listView
+            ProgressBar loadingView = (ProgressBar) findViewById(R.id.loading);
+            loadingView.setVisibility(View.GONE);
+            ListView stationboard = (ListView) findViewById(R.id.stationboard);
+            stationboard.setVisibility(View.VISIBLE);
+
+            // TODO: reload after X minutes
+
+//            try {
+//                JSONObject resultJsonObj  = new JSONObject(result); // json
+//                JSONArray stations = resultJsonObj.getJSONArray("stationboard"); // get data object
+//                String originStation = resultJsonObj.getJSONObject("station").getString("name");
+//
+//                // assume adapter is already clear
+//                for (int i = 0; i < stations.length(); i++) {
+//                    JSONObject connJsonObj = stations.getJSONObject(i);
+//                    JSONObject stopJsonObj = connJsonObj.getJSONObject("stop");
+//                    String departureTime = getTimeFromTimestamp(stopJsonObj.getString("departure"));
+//                    String arrivalTime = getTimeFromTimestamp(stopJsonObj.getString("arrival"));
+//                    String destinationStation = connJsonObj.getString("to");
+//                    Connection connection = new Connection(
+//                        connJsonObj.getString("name"),
+//                        originStation,
+//                        departureTime,
+//                        destinationStation,
+//                        arrivalTime
+//                    );
+//                    Log.d(LOG_TAG, "FOUND CONNECTION ! name is " + connection.name + " at " + connection.departure);
+//                    mConnectionsAdapter.add(connection);
+//                }
+//                // hide loadingView + show listView
+//                ProgressBar loadingView = (ProgressBar) findViewById(R.id.loading);
+//                loadingView.setVisibility(View.GONE);
+//                ListView stationboard = (ListView) findViewById(R.id.stationboard);
+//                stationboard.setVisibility(View.VISIBLE);
+//
+//                // call adapter notify data set changed method
+//                mConnectionsAdapter.notifyDataSetChanged();
+//            } catch (JSONException e) {
+//               // fail silently
+//            }
+
+        }
+
+//        private String getTimeFromTimestamp(String datetime) {
+//            try {
+//                Date dateObj  = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").parse(datetime);
+//                return new SimpleDateFormat("HH:mm").format(dateObj);
+//            } catch (ParseException e) {
+//                // don't format the date
+//                Log.d(this.getClass().getName(), "setViewValue PARSE ERROR datetime string  = " + datetime + " " + e.getMessage() + " " + e.getStackTrace());
+//            }
+//            return "";
+//        }
+    }
+
+    private class StationboardLoaderTimerTask extends TimerTask {
+
+        private String mLocation;
+
+        public StationboardLoaderTimerTask(String location) {
+            mLocation = location;
+        }
+
+        @Override
+        public void run() {
+            loadStationboard();
+
+            // wait then run again
             try {
-                JSONObject resultJsonObj  = new JSONObject(result); // json
-                JSONArray stations = resultJsonObj.getJSONArray("stationboard"); // get data object
-                String originStation = resultJsonObj.getJSONObject("station").getString("name");
-
-                // assume adapter is already clear
-                for (int i = 0; i < stations.length(); i++) {
-                    JSONObject connJsonObj = stations.getJSONObject(i);
-                    JSONObject stopJsonObj = connJsonObj.getJSONObject("stop");
-                    String departureTime = getTimeFromTimestamp(stopJsonObj.getString("departure"));
-                    String arrivalTime = getTimeFromTimestamp(stopJsonObj.getString("arrival"));
-                    String destinationStation = connJsonObj.getString("to");
-                    Connection connection = new Connection(
-                        connJsonObj.getString("name"),
-                        originStation,
-                        departureTime,
-                        destinationStation,
-                        arrivalTime
-                    );
-                    Log.d(LOG_TAG, "FOUND CONNECTION ! name is " + connection.name + " at " + connection.departure);
-                    mConnectionsAdapter.add(connection);
-                }
-                // hide loadingView + show listView
-                TextView loadingView = (TextView) findViewById(R.id.loading);
-                loadingView.setVisibility(View.GONE);
-                ListView stationboard = (ListView) findViewById(R.id.stationboard);
-                stationboard.setVisibility(View.VISIBLE);
-
-                // call adapter notify data set changed method
-                mConnectionsAdapter.notifyDataSetChanged();
-            } catch (JSONException e) {
-               // fail silently
+                wait(20000);
+                loadStationboard();
+            } catch (InterruptedException e) {
+                // dont reload - let cycle break
             }
         }
 
-        private String getTimeFromTimestamp(String datetime) {
-            try {
-                Date dateObj  = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").parse(datetime);
-                return new SimpleDateFormat("HH:mm").format(dateObj);
-            } catch (ParseException e) {
-                // don't format the date
-                Log.d(this.getClass().getName(), "setViewValue PARSE ERROR datetime string  = " + datetime + " " + e.getMessage() + " " + e.getStackTrace());
-            }
-            return "";
+        private void loadStationboard() {
+            final String[] params = {mLocation};
+            StationboardLoader task = new StationboardLoader();
+            task.execute(params);
         }
     }
 
-    private class LoadLocationsTask extends AsyncTask<String, Void, String> {
+    private class LocationsLoader extends AsyncTask<String, Void, String> {
         @Override
         protected String doInBackground(String... params) {
 
             // params comes from the execute() call: params[0] is the queryString.
             try {
-                String result = getLocations(params[0]);
+                String result = getLocationsHttpReqResult(params[0]);
                 JSONObject jObject  = new JSONObject(result); // json
                 JSONArray stations = jObject.getJSONArray("stations"); // get data object
                 for (int i = 0; i < stations.length(); i++) {
@@ -145,7 +191,7 @@ public class MainActivity extends ActionBarActivity
     // this is the Adapter being used to display the stationboard
     ConnectionsAdapter mConnectionsAdapter = null;
 
-    private String getConnections(String queryString) throws IOException {
+    private String getStationboardHttpRequestResult(String queryString) throws IOException {
         InputStream is = null;
 
         try {
@@ -180,7 +226,7 @@ public class MainActivity extends ActionBarActivity
         }
     }
 
-    private String getLocations(String queryString) throws IOException {
+    private String getLocationsHttpReqResult(String queryString) throws IOException {
         InputStream is = null;
 
         try {
@@ -291,7 +337,7 @@ Log.d(LOG_TAG, "fillData");
                         final StringBuilder sb = new StringBuilder();
                         sb.append(s);
                         final String[] params = {sb.toString()};
-                        LoadLocationsTask task = new LoadLocationsTask();
+                        LocationsLoader task = new LocationsLoader();
                         task.execute(params);
                     }
                 }
@@ -308,19 +354,23 @@ Log.d(LOG_TAG, "fillData");
                 @Override
                 public void onItemClick(AdapterView<?> parent, View itemView, int pos,
                                         long id) {
-                    // 1/3: clear list
-                    mConnectionsAdapter.clearData();
-                    // 2/3: show loading textView + hide listview
-                    TextView loadingView = (TextView) findViewById(R.id.loading);
+
+                    // 1/3: show loading view + hide listview
+                    ProgressBar loadingView = (ProgressBar) findViewById(R.id.loading);
                     loadingView.setVisibility(View.VISIBLE);
                     ListView stationboard = (ListView) findViewById(R.id.stationboard);
                     stationboard.setVisibility(View.GONE);
 
-                    // 3/3: load connections
+                    // 2/3: load connections
                     TextView textView = (TextView) itemView.findViewById(R.id.autoCompleteItemTextView);
                     final String[] params = {(String)textView.getText()};
-                    LoadConnectionsTask task = new LoadConnectionsTask();
+                    StationboardLoader task = new StationboardLoader();
                     task.execute(params);
+
+                    /**
+                     * StationboardLoaderTimerTask task = new StationboardLoaderTimerTask();
+                     * task.run(); ????
+                     */
                 }
             });
         }

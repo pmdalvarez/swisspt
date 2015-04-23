@@ -25,14 +25,13 @@
         android:layout_marginRight="10dp"
         />
 
-    <TextView android:id="@+id/loading"
+    <ProgressBar
+        android:id="@+id/loading"
         android:layout_below="@+id/stationboard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:text="@string/loading"
-        android:visibility="gone"
-        />
-
+        style="@android:style/Widget.ProgressBar.Small"
+        android:layout_marginTop="10dp" />
 
 </RelativeLayout>
