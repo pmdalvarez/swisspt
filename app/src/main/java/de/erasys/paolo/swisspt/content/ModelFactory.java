@@ -20,6 +20,8 @@ public class ModelFactory {
 
     private static final String LOG_TAG = ModelFactory.class.getSimpleName();
 
+    private static final SimpleDateFormat sSimpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+
     public static ArrayList<Connection> getConnectionsFromJsonString(String jsonString) {
         ArrayList<Connection> connections = new ArrayList<>();
         try {
@@ -52,7 +54,7 @@ public class ModelFactory {
 
     private static String getTimeFromTimestamp(String datetime) {
         try {
-            Date dateObj  = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").parse(datetime);
+            Date dateObj  = sSimpleDateFormat.parse(datetime);
             return new SimpleDateFormat("HH:mm").format(dateObj);
         } catch (ParseException e) {
             // don't format the date - return empty string
