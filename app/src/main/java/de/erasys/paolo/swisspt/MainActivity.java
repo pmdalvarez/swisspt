@@ -77,9 +77,7 @@ public class MainActivity extends ActionBarActivity
         }
     }
 
-    private class StationboardLoader extends AsyncTask<String, Void, String> {
-
-        private ArrayList<Connection> mConnections;
+    private class StationboardLoader extends AsyncTask<String, Void, ArrayList<Connection>> {
 
         @Override
         protected void onPreExecute() {
@@ -91,24 +89,26 @@ public class MainActivity extends ActionBarActivity
         }
 
         @Override
-        protected String doInBackground(String... params) {
+        protected ArrayList<Connection> doInBackground(String... params) {
 
             // params comes from the execute() call: params[0] is the queryString.
             try {
                 String result = HttpRequestHelper.getStationboard(params[0]);
                 // parsing on background thread rather than UI thread as to not overburden it
-                mConnections = ModelFactory.getConnectionsFromJsonString(result);
+                ArrayList<Connection> connections = ModelFactory.getConnectionsFromJsonString(result);
 
-                return result;
+                return connections;
             } catch (IOException e) {
-                return "Unable to retrieve web page. URL may be invalid.";
+                return null;
             }
         }
 
         @Override
-        protected void onPostExecute(String result) {
+        protected void onPostExecute(ArrayList<Connection> connections) {
+            if (connections == null) return;
+
             // update contents of adapter with new list of connections
-            mConnectionsAdapter.setValues(mConnections);
+            mConnectionsAdapter.setValues(connections);
             mConnectionsAdapter.notifyDataSetChanged();
 
             // hide loadingView + show listView
@@ -116,8 +116,6 @@ public class MainActivity extends ActionBarActivity
             loadingView.setVisibility(View.GONE);
             ListView stationboard = (ListView) findViewById(R.id.stationboard);
             stationboard.setVisibility(View.VISIBLE);
-
-            // TODO: reload after X minutes
         }
 
     }
@@ -202,6 +200,11 @@ public class MainActivity extends ActionBarActivity
         }
     }
 
+    private void setupStationboard() {
+        final ListView listView = (ListView) findViewById(R.id.stationboard);
+        mConnectionsAdapter = new ConnectionsAdapter(this, new ArrayList<Connection>());
+        listView.setAdapter(mConnectionsAdapter);
+    }
 
     private void setupAutoCompleteTextView() {
 Log.d(LOG_TAG, "fillData");
@@ -285,12 +288,6 @@ Log.d(LOG_TAG, "fillData");
         };
         mStationboardReloader = new Timer();
         mStationboardReloader.scheduleAtFixedRate(timerTask, 0, 15 * 1000);
-    }
-
-    private void setupStationboard() {
-        final ListView listView = (ListView) findViewById(R.id.stationboard);
-        mConnectionsAdapter = new ConnectionsAdapter(this, new ArrayList<Connection>());
-        listView.setAdapter(mConnectionsAdapter);
     }
 
 }
