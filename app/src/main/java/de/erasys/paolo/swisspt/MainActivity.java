@@ -20,10 +20,6 @@ import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
@@ -36,45 +32,12 @@ import de.erasys.paolo.swisspt.content.model.Connection;
 import de.erasys.paolo.swisspt.content.provider.LocationsContentProvider;
 import de.erasys.paolo.swisspt.content.provider.LocationsTable;
 import de.erasys.paolo.swisspt.helpers.HttpRequestHelper;
+import de.erasys.paolo.swisspt.networking.LocationsCallbacks;
+import de.erasys.paolo.swisspt.networking.LocationsLoader;
 
 
 public class MainActivity extends ActionBarActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
-
-    private class LocationsLoader implements Runnable {
-
-        private String mQueryStr;
-
-        public LocationsLoader(String queryStr) {
-            this.mQueryStr = queryStr;
-        }
-
-        public void run() {
-            try {
-                Log.d(LOG_TAG, "SEARCHING FOR LOCATIONS!!");
-                String result = HttpRequestHelper.getLocations(mQueryStr);
-                JSONObject jObject  = new JSONObject(result); // json
-                JSONArray stations = jObject.getJSONArray("stations"); // get data object
-                for (int i = 0; i < stations.length(); i++) {
-                    JSONObject station = stations.getJSONObject(i);
-                    String locationName = station.getString("name");
-                    Log.d(LOG_TAG, "FOUND LOCATION ! name is " + locationName);
-                    ContentValues values = new ContentValues();
-                    values.put(LocationsTable.COLUMN_NAME, locationName);
-                    getContentResolver().insert(LocationsContentProvider.CONTENT_URI, values);
-                }
-
-                // go to ui thread to tell adapter we have new data
-                runOnUiThread(new Runnable() {
-                    public void run() {mLocationsAdapter.notifyDataSetChanged();}
-                });
-            } catch (IOException e) {
-                Log.d(LOG_TAG, "Unable to retrieve web page. URL may be invalid.");
-            } catch (JSONException e) {
-                Log.d(LOG_TAG, "Cannot parse locations query response.");
-            }
-        }
-    }
 
     private class StationboardLoader implements Runnable {
 
@@ -241,7 +204,26 @@ Log.d(LOG_TAG, "fillData");
                         Log.d(LOG_TAG, "TEXT CHANGED!!! Querying swiss PT API");
                         final StringBuilder sb = new StringBuilder();
                         sb.append(s);
-                        mExecutorService.execute(new LocationsLoader(sb.toString()));
+                        mExecutorService.execute(new LocationsLoader(sb.toString(), new LocationsCallbacks() {
+
+                            @Override
+                            public void onLocationsLoaded() {
+                                runOnUiThread(new Runnable() {
+                                    public void run() {
+                                        mLocationsAdapter.notifyDataSetChanged();
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onLocationsFailed() {
+                            }
+
+                            @Override
+                            public void onLocationRetrieved(ContentValues values) {
+                                getContentResolver().insert(LocationsContentProvider.CONTENT_URI, values);
+                            }
+                        }));
                     }
 
                     // 2/3: If there is a Stationboard Reloader instance
@@ -274,7 +256,7 @@ Log.d(LOG_TAG, "fillData");
                     // cancel existing reloader if exists
                     if (mReloader != null)  {
                         Log.d(LOG_TAG, "ITEM CHOSEN!!! stopping current StationboardReloader");
-                        mHandler.removeCallbacks(mReloader);
+                        mHandler.removeCallbacks(null);
                     }
 
                     startStationboardReloader();
