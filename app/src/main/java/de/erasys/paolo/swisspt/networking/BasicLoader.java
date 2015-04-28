@@ -17,8 +17,13 @@ public abstract class BasicLoader implements Runnable {
 
     private static final String LOG_TAG = BasicLoader.class.getSimpleName();
 
+    protected void preExecute() {
+
+    };
+
     public void run() {
         InputStream is = null;
+        preExecute();
 
         try {
             URL url = new URL(getUrl());

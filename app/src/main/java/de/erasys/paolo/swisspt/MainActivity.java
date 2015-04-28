@@ -20,74 +20,23 @@ import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import de.erasys.paolo.swisspt.adapters.ConnectionsAdapter;
 import de.erasys.paolo.swisspt.adapters.LocationsAdapter;
-import de.erasys.paolo.swisspt.content.ModelFactory;
 import de.erasys.paolo.swisspt.content.model.Connection;
 import de.erasys.paolo.swisspt.content.provider.LocationsContentProvider;
 import de.erasys.paolo.swisspt.content.provider.LocationsTable;
-import de.erasys.paolo.swisspt.helpers.HttpRequestHelper;
 import de.erasys.paolo.swisspt.networking.LocationsCallbacks;
 import de.erasys.paolo.swisspt.networking.LocationsLoader;
+import de.erasys.paolo.swisspt.networking.StationboardCallbacks;
+import de.erasys.paolo.swisspt.networking.StationboardLoader;
 
 
 public class MainActivity extends ActionBarActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
-
-    private class StationboardLoader implements Runnable {
-
-        private String mQueryStr;
-
-        public StationboardLoader(String queryStr) {
-            this.mQueryStr = queryStr;
-        }
-
-        public void run() {
-            runOnUiThread(new Runnable() {
-                public void run() {setStationboardVisibility(false);}
-            });
-
-            final ArrayList<Connection> connections;
-            try {
-                String result = HttpRequestHelper.getStationboard(mQueryStr);
-                connections = ModelFactory.getConnectionsFromJsonString(result);
-            } catch (IOException e) {
-                Log.d(LOG_TAG, "IOException trying to get connections from stationboard http call");
-                runOnUiThread(new Runnable() {
-                    public void run() {setStationboardVisibility(true);}
-                });
-                return;
-            }
-
-            runOnUiThread(new Runnable() {
-                public void run() {
-                    // update contents of adapter with new list of connections
-                    mConnectionsAdapter.setValues(connections);
-                    mConnectionsAdapter.notifyDataSetChanged();
-                    setStationboardVisibility(true);
-                }
-            });
-        }
-
-        private void setStationboardVisibility(boolean visible) {
-            // hide loadingView + show listView
-            ProgressBar spinner = (ProgressBar) findViewById(R.id.loading);
-            ListView stationboard = (ListView) findViewById(R.id.stationboard);
-            if (visible) {
-                spinner.setVisibility(View.GONE);
-                stationboard.setVisibility(View.VISIBLE);
-            } else {
-                spinner.setVisibility(View.VISIBLE);
-                stationboard.setVisibility(View.GONE);
-            }
-        }
-
-    }
 
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
 
@@ -265,16 +214,55 @@ Log.d(LOG_TAG, "fillData");
         }
     }
 
+
+    private void setStationboardVisibility(boolean visible) {
+        // hide loadingView + show listView
+        ProgressBar spinner = (ProgressBar) findViewById(R.id.loading);
+        ListView stationboard = (ListView) findViewById(R.id.stationboard);
+        if (visible) {
+            spinner.setVisibility(View.GONE);
+            stationboard.setVisibility(View.VISIBLE);
+        } else {
+            spinner.setVisibility(View.VISIBLE);
+            stationboard.setVisibility(View.GONE);
+        }
+    }
+
     private void startStationboardReloader() {
         TextView textView = (TextView) findViewById(R.id.autoCompleteLocationSearch);
         final String stationName = textView.getText().toString();
         mReloader = new Runnable() {
             public void run() {
-                mExecutorService.execute(new StationboardLoader(stationName));
+                mExecutorService.execute(new StationboardLoader(stationName, new StationboardCallbacks() {
+
+                    @Override
+                    public void onConnectionsLoading() {
+                        runOnUiThread(new Runnable() {
+                            public void run() {
+                                setStationboardVisibility(false);
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onConnectionsLoaded(final ArrayList<Connection> connections) {
+                        runOnUiThread(new Runnable() {
+                            public void run() {
+                                mLocationsAdapter.notifyDataSetChanged();
+                                mConnectionsAdapter.setValues(connections);
+                                mConnectionsAdapter.notifyDataSetChanged();
+                                setStationboardVisibility(true);
+                            }
+                        });
+                    }
+
+                }));
                 mHandler.postDelayed(mReloader, RELOAD_TIME_SECS * 1000);
             }
         };
         mHandler.post(mReloader);
     }
+
+
 
 }

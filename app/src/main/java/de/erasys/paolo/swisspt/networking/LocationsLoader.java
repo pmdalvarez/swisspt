@@ -29,8 +29,9 @@ public class LocationsLoader extends BasicLoader {
     }
 
     protected void handleResult(String result) {
+        Log.d(LOG_TAG, "API LOCATIONS RESPONSE is " + result);
+
         try {
-Log.d(LOG_TAG, "RESULT OF API CALL!!!!!!!!: " + result);
             JSONObject jObject  = new JSONObject(result); // json
             JSONArray stations = jObject.getJSONArray("stations"); // get data object
             for (int i = 0; i < stations.length(); i++) {
