@@ -114,7 +114,7 @@ public class MainActivity extends ActionBarActivity
         super.onPause();
         if (mReloader != null)  {
             Log.d(LOG_TAG, "Application on pause!! cancelling mReloader");
-            mHandler.removeCallbacks(mReloader);
+            mHandler.removeCallbacksAndMessages(null);
         }
     }
 
@@ -179,8 +179,7 @@ Log.d(LOG_TAG, "fillData");
                     // -  cancel, to stop reloading
                     // -  make null, to indicate that we don't wanna restart it onResume
                     if (mReloader != null) {
-                        mHandler.removeCallbacks(mReloader);
-                        mReloader = null;
+                        mHandler.removeCallbacksAndMessages(null);
                     }
 
                     // 3/3: Clear stationboard table if not already empty
@@ -205,7 +204,7 @@ Log.d(LOG_TAG, "fillData");
                     // cancel existing reloader if exists
                     if (mReloader != null)  {
                         Log.d(LOG_TAG, "ITEM CHOSEN!!! stopping current StationboardReloader");
-                        mHandler.removeCallbacks(null);
+                        mHandler.removeCallbacksAndMessages(null);
                     }
 
                     startStationboardReloader();
