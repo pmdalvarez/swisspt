@@ -2,7 +2,6 @@ package de.erasys.paolo.swisspt;
 
 import android.content.ContentValues;
 import android.database.Cursor;
-import android.os.Handler;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
@@ -21,16 +20,16 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.util.ArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import de.erasys.paolo.swisspt.adapters.ConnectionsAdapter;
 import de.erasys.paolo.swisspt.adapters.LocationsAdapter;
 import de.erasys.paolo.swisspt.content.model.Connection;
 import de.erasys.paolo.swisspt.content.provider.LocationsContentProvider;
 import de.erasys.paolo.swisspt.content.provider.LocationsTable;
+import de.erasys.paolo.swisspt.networking.CommonQueueExecutor;
 import de.erasys.paolo.swisspt.networking.LocationsCallbacks;
 import de.erasys.paolo.swisspt.networking.LocationsLoader;
+import de.erasys.paolo.swisspt.networking.ScheduledTaskExecutor;
 import de.erasys.paolo.swisspt.networking.StationboardCallbacks;
 import de.erasys.paolo.swisspt.networking.StationboardLoader;
 
@@ -38,9 +37,55 @@ import de.erasys.paolo.swisspt.networking.StationboardLoader;
 public class MainActivity extends ActionBarActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
 
-    private static final String LOG_TAG = MainActivity.class.getSimpleName();
+    class MyLocationsCallbacks implements LocationsCallbacks {
+
+        @Override
+        public void onLocationsLoaded() {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    mLocationsAdapter.notifyDataSetChanged();
+                }
+            });
+        }
+
+        @Override
+        public void onLocationsFailed() {
+        }
+
+        @Override
+        public void onLocationRetrieved(ContentValues values) {
+            getContentResolver().insert(LocationsContentProvider.CONTENT_URI, values);
+        }
+    }
+
+    class MyStationboardCallbacks implements StationboardCallbacks {
+
+        @Override
+        public void onConnectionsLoading() {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    setStationboardVisibility(false);
+                }
+            });
+        }
+
+        @Override
+        public void onConnectionsLoaded(final ArrayList<Connection> connections) {
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    mLocationsAdapter.notifyDataSetChanged();
+                    mConnectionsAdapter.setValues(connections);
+                    mConnectionsAdapter.notifyDataSetChanged();
+                    setStationboardVisibility(true);
+                }
+            });
+        }
+
+    }
 
     private static final int RELOAD_TIME_SECS = 15;
+
+    private static final String LOG_TAG = MainActivity.class.getSimpleName();
 
     // this is the Adapter being used to display the location suggestions of the autocompletetextview
     private LocationsAdapter mLocationsAdapter = null;
@@ -48,11 +93,7 @@ public class MainActivity extends ActionBarActivity
     // this is the Adapter being used to display the stationboard
     private ConnectionsAdapter mConnectionsAdapter = null;
 
-    private ExecutorService mExecutorService = null;
-
-    private final Handler mHandler = new Handler();
-
-    private Runnable mReloader = null;
+    private StationboardLoader mStationboardLoader = null;
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -100,10 +141,6 @@ public class MainActivity extends ActionBarActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        if (mExecutorService == null) {
-            // have several parallel threads so that locations can be searched while stationboard is searched at same time
-            mExecutorService = Executors.newFixedThreadPool(10);
-        }
         setupAutoCompleteTextView();
         setupStationboard();
     }
@@ -112,24 +149,26 @@ public class MainActivity extends ActionBarActivity
     @Override
     protected void onPause() {
         super.onPause();
-        if (mReloader != null)  {
+        if (mStationboardLoader != null)  {
             Log.d(LOG_TAG, "Application on pause!! cancelling mReloader");
-            mHandler.removeCallbacksAndMessages(null);
+            ScheduledTaskExecutor.getInstance().removeTask(mStationboardLoader);
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (mReloader != null)  {
+        if (mStationboardLoader != null)  {
             Log.d(LOG_TAG, "Application resumed and cancelled mReloader exists!! restarting reloader");
-            mHandler.postDelayed(mReloader, RELOAD_TIME_SECS * 1000);
+            ScheduledTaskExecutor.getInstance().addTask(mStationboardLoader, RELOAD_TIME_SECS);
         }
     }
 
     @Override
     protected void onDestroy() {
-        if (mExecutorService != null) mExecutorService.shutdown();
+        super.onDestroy();
+        CommonQueueExecutor.getInstance().shutdown();
+        mStationboardLoader = null;
     }
 
     private void setupStationboard() {
@@ -153,33 +192,16 @@ Log.d(LOG_TAG, "fillData");
                         Log.d(LOG_TAG, "TEXT CHANGED!!! Querying swiss PT API");
                         final StringBuilder sb = new StringBuilder();
                         sb.append(s);
-                        mExecutorService.execute(new LocationsLoader(sb.toString(), new LocationsCallbacks() {
-
-                            @Override
-                            public void onLocationsLoaded() {
-                                runOnUiThread(new Runnable() {
-                                    public void run() {
-                                        mLocationsAdapter.notifyDataSetChanged();
-                                    }
-                                });
-                            }
-
-                            @Override
-                            public void onLocationsFailed() {
-                            }
-
-                            @Override
-                            public void onLocationRetrieved(ContentValues values) {
-                                getContentResolver().insert(LocationsContentProvider.CONTENT_URI, values);
-                            }
-                        }));
+                        LocationsLoader locationsLoader = new LocationsLoader(sb.toString(), new MyLocationsCallbacks());
+                        CommonQueueExecutor.getInstance().addRequest(locationsLoader);
                     }
 
                     // 2/3: If there is a Stationboard Reloader instance
                     // -  cancel, to stop reloading
                     // -  make null, to indicate that we don't wanna restart it onResume
-                    if (mReloader != null) {
-                        mHandler.removeCallbacksAndMessages(null);
+                    if (mStationboardLoader != null) {
+                        ScheduledTaskExecutor.getInstance().removeTask(mStationboardLoader);
+                        mStationboardLoader = null;
                     }
 
                     // 3/3: Clear stationboard table if not already empty
@@ -202,17 +224,20 @@ Log.d(LOG_TAG, "fillData");
                                         long id) {
 
                     // cancel existing reloader if exists
-                    if (mReloader != null)  {
+                    if (mStationboardLoader != null)  {
                         Log.d(LOG_TAG, "ITEM CHOSEN!!! stopping current StationboardReloader");
-                        mHandler.removeCallbacksAndMessages(null);
+                        ScheduledTaskExecutor.getInstance().removeTask(mStationboardLoader);
                     }
 
-                    startStationboardReloader();
+                    // reinitialise StationboardReloader
+                    TextView textView = (TextView) findViewById(R.id.autoCompleteLocationSearch);
+                    final String stationName = textView.getText().toString();
+                    StationboardLoader stationboardLoader = new StationboardLoader(stationName, new MyStationboardCallbacks());
+                    ScheduledTaskExecutor.getInstance().addTask(stationboardLoader, RELOAD_TIME_SECS);
                 }
             });
         }
     }
-
 
     private void setStationboardVisibility(boolean visible) {
         // hide loadingView + show listView
@@ -226,42 +251,5 @@ Log.d(LOG_TAG, "fillData");
             stationboard.setVisibility(View.GONE);
         }
     }
-
-    private void startStationboardReloader() {
-        TextView textView = (TextView) findViewById(R.id.autoCompleteLocationSearch);
-        final String stationName = textView.getText().toString();
-        mReloader = new Runnable() {
-            public void run() {
-                mExecutorService.execute(new StationboardLoader(stationName, new StationboardCallbacks() {
-
-                    @Override
-                    public void onConnectionsLoading() {
-                        runOnUiThread(new Runnable() {
-                            public void run() {
-                                setStationboardVisibility(false);
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void onConnectionsLoaded(final ArrayList<Connection> connections) {
-                        runOnUiThread(new Runnable() {
-                            public void run() {
-                                mLocationsAdapter.notifyDataSetChanged();
-                                mConnectionsAdapter.setValues(connections);
-                                mConnectionsAdapter.notifyDataSetChanged();
-                                setStationboardVisibility(true);
-                            }
-                        });
-                    }
-
-                }));
-                mHandler.postDelayed(mReloader, RELOAD_TIME_SECS * 1000);
-            }
-        };
-        mHandler.post(mReloader);
-    }
-
-
 
 }
